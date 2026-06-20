@@ -11,17 +11,31 @@ path = "./src/bin/main.rs"
 [dependencies]
 esp-hal = { version = "~1.1.0", features = ["defmt", "esp32c3", "unstable"] }
 
+# OLED
+ssd1306 = "0.10.0"
+embedded-graphics = "0.8.2"
 
-defmt                  = "1.0.1"
+# Traits
+embedded-hal = "1.0.0"
+
+# Fixed-capacity collections
+heapless = "0.9.3"
+
 esp-bootloader-esp-idf = { version = "0.5.0", features = ["defmt", "esp32c3"] }
 
 critical-section = "1.2.0"
+
+# Logging
+defmt                  = "1.0.1"
 esp-backtrace = { version = "0.19.0", features = [
   "defmt",
   "esp32c3",
   "panic-handler",
 ] }
 esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32c3"] }
+
+
+
 
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html

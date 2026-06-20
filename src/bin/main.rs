@@ -7,34 +7,39 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use defmt::info;
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
+use esp_hal::i2c::master::{Config, I2c};
 use esp_hal::main;
-use esp_hal::time::{Duration, Instant};
+use esp_hal::time::Rate;
 use esp_println as _;
+use sentinel_mini::app::App;
+use sentinel_mini::drivers::battery::Battery;
+use sentinel_mini::drivers::buzzer::Buzzer;
+use sentinel_mini::drivers::oled::Oled;
+use sentinel_mini::drivers::touch::TouchSensor;
 
-// This creates a default app-descriptor required by the esp-idf bootloader.
-// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
-#[allow(
-    clippy::large_stack_frames,
-    reason = "it's not unusual to allocate larger buffers etc. in main"
-)]
+#[allow(clippy::large_stack_frames)]
 #[main]
 fn main() -> ! {
-    // generator version: 1.3.0
-    // generator parameters: --chip esp32c3 -o unstable-hal -o defmt -o esp-backtrace
-
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    let _peripherals = esp_hal::init(config);
+    let peripherals = esp_hal::init(config);
 
-    loop {
-        info!("Hello world!");
-        let delay_start = Instant::now();
-        while delay_start.elapsed() < Duration::from_millis(500) {}
-    }
+    let i2c = I2c::new(
+        peripherals.I2C0,
+        Config::default().with_frequency(Rate::from_khz(400)),
+    )
+    .unwrap()
+    .with_sda(peripherals.GPIO20)
+    .with_scl(peripherals.GPIO21);
 
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.1.0/examples
+    let oled = Oled::new(i2c);
+    let touch = TouchSensor::new(peripherals.GPIO1);
+    let buzzer = Buzzer::new(peripherals.GPIO2);
+    let battery = Battery::new();
+
+    let mut app = App::new(oled, touch, buzzer, battery);
+    app.run();
 }
