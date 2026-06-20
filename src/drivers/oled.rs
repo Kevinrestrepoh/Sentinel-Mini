@@ -30,7 +30,6 @@ where
             }
             Err(_) => {
                 error!("OLED init FAILED at 0x3C — check wiring and pull-up resistors");
-                error!("SDA=GPIO21, SCL=GPIO20. If your module uses 0x3D, update the address.");
                 panic!("OLED init failed");
             }
         }

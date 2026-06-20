@@ -2,6 +2,7 @@ pub mod state;
 
 use defmt::{info, warn};
 use esp_hal::time::{Duration, Instant};
+use esp_storage::FlashStorage;
 use heapless::String;
 
 use crate::{
@@ -27,7 +28,7 @@ pub struct App<'d, I2C> {
     touch: TouchSensor<'d>,
     buzzer: Buzzer<'d>,
     battery: Battery,
-    logger: EventLogger,
+    logger: EventLogger<'d>,
     state: AppState,
     home_cursor: HomeMenuItem,
 }
@@ -41,6 +42,7 @@ where
         touch: TouchSensor<'d>,
         buzzer: Buzzer<'d>,
         battery: Battery,
+        flash: FlashStorage<'d>,
     ) -> Self {
         info!("initialised");
         Self {
@@ -48,7 +50,7 @@ where
             touch,
             buzzer,
             battery,
-            logger: EventLogger::new(),
+            logger: EventLogger::new(flash),
             state: AppState::Boot,
             home_cursor: HomeMenuItem::Arm,
         }
@@ -56,7 +58,6 @@ where
 
     pub fn run(&mut self) -> ! {
         let boot_start = Instant::now();
-
         loop {
             match self.state {
                 AppState::Boot => self.state_boot(boot_start),
@@ -113,13 +114,12 @@ where
                 self.logger.log(EventKind::Disarmed, 0);
                 self.state = AppState::Home;
             }
-            TouchEvent::Tap | TouchEvent::None => {
-                if self.touch.is_touched() {
-                    info!("triggering alarm");
-                    self.logger.log(EventKind::AlarmTriggered, 0);
-                    self.state = AppState::Alarm;
-                }
+            TouchEvent::Tap => {
+                info!("Alarm triggered");
+                self.logger.log(EventKind::AlarmTriggered, 0);
+                self.state = AppState::Alarm;
             }
+            TouchEvent::None => {}
         }
     }
 
