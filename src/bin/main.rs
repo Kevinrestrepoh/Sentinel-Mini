@@ -12,6 +12,8 @@ use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c::master::{Config, I2c};
 use esp_hal::main;
+use esp_hal::rtc_cntl::{Rtc, SocResetReason, reset_reason};
+use esp_hal::system::Cpu;
 use esp_hal::time::Rate;
 use esp_println as _;
 use esp_storage::FlashStorage;
@@ -43,6 +45,8 @@ fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
+    let woke_from_deep_sleep = reset_reason(Cpu::ProCpu) == Some(SocResetReason::CoreDeepSleep);
+
     let i2c = I2c::new(
         peripherals.I2C0,
         Config::default().with_frequency(Rate::from_khz(400)),
@@ -57,6 +61,16 @@ fn main() -> ! {
     let battery = Battery::new();
     let flash = FlashStorage::new(peripherals.FLASH);
 
-    let mut app = App::new(oled, touch, buzzer, battery, flash);
+    let rtc = Rtc::new(peripherals.LPWR);
+
+    let mut app = App::new(
+        oled,
+        touch,
+        buzzer,
+        battery,
+        flash,
+        rtc,
+        woke_from_deep_sleep,
+    );
     app.run();
 }

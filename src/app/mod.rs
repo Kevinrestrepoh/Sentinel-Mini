@@ -1,7 +1,14 @@
 pub mod state;
 
 use defmt::{info, warn};
-use esp_hal::time::{Duration, Instant};
+use esp_hal::{
+    gpio::RtcPinWithResistors,
+    rtc_cntl::{
+        Rtc,
+        sleep::{RtcioWakeupSource, WakeupLevel},
+    },
+    time::{Duration, Instant},
+};
 use esp_storage::FlashStorage;
 use heapless::String;
 
@@ -29,6 +36,7 @@ pub struct App<'d, I2C> {
     buzzer: Buzzer<'d>,
     battery: Battery,
     logger: EventLogger<'d>,
+    rtc: Rtc<'d>,
     state: AppState,
     home_cursor: HomeMenuItem,
 }
@@ -43,15 +51,26 @@ where
         buzzer: Buzzer<'d>,
         battery: Battery,
         flash: FlashStorage<'d>,
+        rtc: Rtc<'d>,
+        woke_from_deep_sleep: bool,
     ) -> Self {
         info!("initialised");
+
+        let initial_state = if woke_from_deep_sleep {
+            info!("awake from deep sleep");
+            AppState::Alarm
+        } else {
+            AppState::Boot
+        };
+
         Self {
             oled,
             touch,
             buzzer,
             battery,
             logger: EventLogger::new(flash),
-            state: AppState::Boot,
+            rtc,
+            state: initial_state,
             home_cursor: HomeMenuItem::Arm,
         }
     }
@@ -105,26 +124,25 @@ where
     }
 
     fn state_armed(&mut self) {
-        self.oled
-            .draw_lines(&["ARMED", "", "Monitoring...", "Hold: disarm"]);
+        self.oled.draw_lines(&["ARMED", "", "Monitoring..."]);
 
-        match self.touch.poll() {
-            TouchEvent::LongPress => {
-                info!("Disarmed by user");
-                self.logger.log(EventKind::Disarmed, 0);
-                self.state = AppState::Home;
-            }
-            TouchEvent::Tap => {
-                info!("Alarm triggered");
-                self.logger.log(EventKind::AlarmTriggered, 0);
-                self.state = AppState::Alarm;
-            }
-            TouchEvent::None => {}
-        }
+        busy_wait_ms(500);
+
+        info!("Entering deep sleep");
+        self.oled.draw_lines(&[]);
+
+        let mut pin = unsafe { esp_hal::peripherals::GPIO1::steal() };
+
+        let wakeup_pins: &mut [(&mut dyn RtcPinWithResistors, WakeupLevel)] =
+            &mut [(&mut pin, WakeupLevel::High)];
+
+        let rtcio = RtcioWakeupSource::new(wakeup_pins);
+        self.rtc.sleep_deep(&[&rtcio]);
     }
 
     fn state_alarm(&mut self) {
         warn!("State: Alarm");
+        self.logger.log(EventKind::AlarmTriggered, 0);
         self.oled
             .draw_lines(&["! ALARM !", "", "Event saved", "Hold: dismiss"]);
 
